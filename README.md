@@ -4,6 +4,8 @@ Empowering chat applications to code, build and run on your local machine.
 
 wcgw is an MCP server with tightly integrated shell and code editing tools.
 
+> ⚠️ **Warning**: This MCP server provides unfiltered access to your machine's shell and files. It does not restrict LLMs from executing arbitrary commands or making unintended changes. This tool can be misused by attackers or run dangerous commands if the AI hallucinates. Run this repository **only** if you fully understand and accept the risks associated with running AI agents with no restrictions.
+
 As of 2026 the reason you could use `wcgw` is that it provides fully interactive shell experience that you and the agent both can control (including sending key-strokes). 
 Combined with the wcgw vscode extension that attaches the agent's shell in your editor, you can get the best agentic shell experience that is out there.
 The file editing tricks and the general minimalism also helps agent be more productive.
