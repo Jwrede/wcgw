@@ -6,6 +6,22 @@ from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field, PrivateAttr, model_serializer, model_validator
 
 
+_PIPE_TAIL_RE = re.compile(r"\|\s*tail(?:\s+(?:-n\s*|-)?(\d+))?\s*$")
+
+
+def strip_tail_pipe(command: str) -> str:
+    """Strip trailing `| tail ...` from a command.
+
+    LLMs frequently pipe output through tail, but wcgw already manages output
+    truncation server-side.  Stripping the pipe avoids hiding useful earlier
+    output from the model.
+    """
+    match = _PIPE_TAIL_RE.search(command)
+    if match:
+        return command[: match.start()].rstrip()
+    return command
+
+
 def normalize_thread_id(thread_id: str) -> str:
     """Normalize thread_id by keeping only word characters (alphanumeric and underscore)."""
     return re.sub(r"[^\w]", "", thread_id)
@@ -140,6 +156,10 @@ class Command(CommandBase):
     command: str
     type: Literal["command"] = "command"
     is_background: bool = False
+
+    def model_post_init(self, __context: Any) -> None:
+        self.command = strip_tail_pipe(self.command)
+        return super().model_post_init(__context)
 
 
 class StatusCheck(CommandBase):

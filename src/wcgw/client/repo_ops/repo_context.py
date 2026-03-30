@@ -85,60 +85,60 @@ def get_all_files_max_depth(
     return all_files
 
 
-def get_recent_git_files(repo: Repository, count: int = 10) -> list[str]:
+# Walk at most this many commits when collecting recent files
+_MAX_COMMITS_WALK = 500
+
+
+def get_recent_git_files(
+    repo: Repository, count: int, existing_files: set[str]
+) -> list[str]:
     """
-    Get the most recently modified files from git history
+    Get the most recently modified files from git history.
 
     Args:
         repo: The git repository
         count: Number of recent files to return
+        existing_files: Set of relative paths that currently exist in the repo,
+                        used instead of per-file filesystem checks.
 
     Returns:
         List of relative paths to recently modified files
     """
-    # Track seen files to avoid duplicates
     seen_files: set[str] = set()
     recent_files: list[str] = []
 
     try:
-        # Get the HEAD reference and walk through recent commits
         head = repo.head
+        commits_walked = 0
         for commit in repo.walk(head.target, SortMode.TOPOLOGICAL | SortMode.TIME):
-            # Skip merge commits which have multiple parents
+            commits_walked += 1
+            if commits_walked > _MAX_COMMITS_WALK:
+                break
+
             if len(commit.parents) > 1:
                 continue
 
-            # If we have a parent, get the diff between the commit and its parent
             if commit.parents:
                 parent = commit.parents[0]
-                diff = repo.diff(parent, commit)
+                diff = parent.tree.diff_to_tree(commit.tree, context_lines=0)
             else:
-                # For the first commit, get the diff against an empty tree
                 diff = commit.tree.diff_to_tree(context_lines=0)
 
-            # Process each changed file in the diff
             for patch in diff:
                 if patch is None:
                     continue
                 file_path = patch.delta.new_file.path
 
-                # Skip if we've already seen this file or if the file was deleted
-                repo_path_parent = Path(repo.path).parent
-                if (
-                    file_path in seen_files
-                    or not (repo_path_parent / file_path).exists()
-                ):
+                if file_path in seen_files or file_path not in existing_files:
                     continue
 
                 seen_files.add(file_path)
                 recent_files.append(file_path)
 
-                # If we have enough files, stop
                 if len(recent_files) >= count:
                     return recent_files
 
     except Exception:
-        # Handle git errors gracefully
         pass
 
     return recent_files
@@ -185,7 +185,10 @@ def get_repo_context(file_or_repo_path: str) -> tuple[str, Path]:
         dynamic_max_files = calculate_dynamic_file_limit(len(all_files))
         # Get recent git files - get at least 10 or 20% of dynamic_max_files, whichever is larger
         recent_files_count = max(10, int(dynamic_max_files * 0.2))
-        recent_git_files = get_recent_git_files(repo, recent_files_count)
+        existing_files_set = set(all_files)
+        recent_git_files = get_recent_git_files(
+            repo, recent_files_count, existing_files_set
+        )
     else:
         # We don't want dynamic limit for non git folders like /tmp or ~
         dynamic_max_files = 50
